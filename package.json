@@ -1,6 +1,6 @@
 {
   "name": "webpack-i18n-fallbacks",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Merge i18n json files with fallbacks",
   "main": "index.js",
   "scripts": {
@@ -16,9 +16,6 @@
     "url": "https://github.com/factorialco/webpack-i18n-fallbacks/issues"
   },
   "homepage": "https://github.com/factorialco/webpack-i18n-fallbacks#readme",
-  "engines": {
-    "node": "8.10.0"
-  },
   "dependencies": {
     "lodash": "^4.17.4"
   }
