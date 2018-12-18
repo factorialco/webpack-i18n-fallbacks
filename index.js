@@ -18,7 +18,7 @@ class I18nPlugin {
       console.log(`Merging locales with their fallbacks...`)
 
       this.supportedLocales.forEach(locale => {
-        compilation.fileDependencies.add([`${this.path}/${locale}.json`])
+        compilation.fileDependencies.add(`${this.path}/${locale}.json`)
 
         let mergedObject
 
