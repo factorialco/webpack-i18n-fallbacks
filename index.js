@@ -12,54 +12,60 @@ class I18nPlugin {
   }
 
   apply (compiler) {
-    compiler.hooks.emit.tapAsync(
+    compiler.hooks.emit.tapPromise(
       'WebpackI18nFallbacks',
-      (compilation, callback) => {
-        console.log('Supported locales: ', this.supportedLocales)
+      compilation => {
+        return new Promise((resolve, reject) => {
+          console.log('Supported locales: ', this.supportedLocales)
 
-        console.log(`Merging locales with their fallbacks...`)
+          console.log(`Merging locales with their fallbacks...`)
 
-        this.supportedLocales.forEach(locale => {
-          compilation.fileDependencies.add(`${this.path}/${locale}.json`)
+          this.supportedLocales.forEach(locale => {
+            compilation.fileDependencies.add(`${this.path}/${locale}.json`)
 
-          let mergedObject
+            let mergedObject
 
-          // Build fallback chain for non master locales
-          if (locale !== this.master) {
-            let currentFallbackLocale = locale
-            let fallbackChain = [locale]
+            // Build fallback chain for non master loales
+            if (locale !== this.master) {
+              let currentFallbackLocale = locale
+              let fallbackChain = [locale]
 
-            while (currentFallbackLocale !== this.master) {
-              currentFallbackLocale = this.fallbacks[currentFallbackLocale]
-              fallbackChain.push(currentFallbackLocale)
+              while (currentFallbackLocale !== this.master) {
+                currentFallbackLocale = this.fallbacks[currentFallbackLocale]
+                fallbackChain.push(currentFallbackLocale)
+              }
+
+              console.log(`Locale fallbacks for ${locale} ->`, fallbackChain)
+
+              mergedObject = fallbackChain.reverse().reduce((memo, fallbackLocale) => {
+                try {
+                  const fallbackFilepath = `${this.path}/${fallbackLocale}.json`
+                  const data = JSON.parse(fs.readFileSync(fallbackFilepath, 'utf8'))
+
+                  memo = _.merge(memo, data)
+
+                  return memo
+                } catch (e) {
+                  reject(e)
+                }
+              }, {})
+            } else {
+              const masterFilepath = `${this.path}/${this.master}.json`
+
+              mergedObject = JSON.parse(fs.readFileSync(masterFilepath, 'utf8'))
             }
 
-            console.log(`Locale fallbacks for ${locale} ->`, fallbackChain)
+            const filepath = `translations/${locale}.json`
+            const content = JSON.stringify(mergedObject)
 
-            mergedObject = fallbackChain.reverse().reduce((memo, fallbackLocale) => {
-              const fallbackFilepath = `${this.path}/${fallbackLocale}.json`
+            compilation.assets[filepath] = {
+              source: () => { return Buffer.from(content) },
+              size: () => { return Buffer.byteLength(content) }
+            }
+          })
 
-              const data = JSON.parse(fs.readFileSync(fallbackFilepath, 'utf8'))
-
-              memo = _.merge(memo, data)
-
-              return memo
-            }, {})
-          } else {
-            const masterFilepath = `${this.path}/${this.master}.json`
-
-            mergedObject = JSON.parse(fs.readFileSync(masterFilepath, 'utf8'))
-          }
-
-          const filepath = `translations/${locale}.json`
-          const content = JSON.stringify(mergedObject)
-
-          compilation.assets[filepath] = {
-            source: () => { return Buffer.from(content) },
-            size: () => { return Buffer.byteLength(content) }
-          }
+          resolve()
         })
-        callback()
       }
     )
   }
