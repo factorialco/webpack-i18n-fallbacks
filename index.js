@@ -9,6 +9,7 @@ class I18nPlugin {
     this.path = options.path
     this.supportedLocales = options.supportedLocales || []
     this.fallbacks = options.fallbacks || {}
+    this.basePath = options.basePath || ''
   }
 
   apply (compiler) {
@@ -55,7 +56,7 @@ class I18nPlugin {
               mergedObject = JSON.parse(fs.readFileSync(masterFilepath, 'utf8'))
             }
 
-            const filepath = `translations/${locale}.json`
+            const filepath = `${this.basePath}translations/${locale}.json`
             const content = JSON.stringify(mergedObject)
 
             compilation.assets[filepath] = {
