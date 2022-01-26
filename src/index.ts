@@ -32,7 +32,7 @@ class I18nPlugin implements WebpackPluginInstance {
     this.basePath = options.basePath || ''
   }
 
-  apply (compiler: Compiler) {
+  apply (compiler: Compiler): void {
     compiler.hooks.emit.tapPromise(
       'WebpackI18nFallbacks',
       compilation => {
