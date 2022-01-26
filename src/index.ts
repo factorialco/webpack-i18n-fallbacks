@@ -1,30 +1,50 @@
-const _ = require('lodash')
-const fs = require('fs')
+import merge from 'lodash/merge'
+import fs from 'fs'
+import { Compiler, WebpackPluginInstance } from 'webpack'
 
-class I18nPlugin {
-  constructor (master, options) {
-    console.log(`Initializing I18n... master: '${master}'`)
+export type Options = {
+  master: string
+  path: string
+  supportedLocales: Array<string>
+  fallbacks?: Record<string, string>
+  basePath?: string
+}
 
-    this.master = master
+interface Assets {
+  [key: string]: {
+    source: () => string | Buffer,
+    size: () => number
+  }
+}
+
+class I18nPlugin implements WebpackPluginInstance {
+  master: string
+  path: string
+  supportedLocales: Array<string>
+  fallbacks?: Record<string, string>
+  basePath?: string
+
+  constructor (options: Options) {
+    this.master = options.master
     this.path = options.path
-    this.supportedLocales = options.supportedLocales || []
+    this.supportedLocales = options.supportedLocales
     this.fallbacks = options.fallbacks || {}
     this.basePath = options.basePath || ''
   }
 
-  apply (compiler) {
+  apply (compiler: Compiler) {
     compiler.hooks.emit.tapPromise(
       'WebpackI18nFallbacks',
       compilation => {
         return new Promise((resolve, reject) => {
+          console.log(`Initializing I18n... master: '${this.master}'`)
           console.log('Supported locales: ', this.supportedLocales)
-
           console.log(`Merging locales with their fallbacks...`)
 
           this.supportedLocales.forEach(locale => {
             compilation.fileDependencies.add(`${this.path}/${locale}.json`)
 
-            let mergedObject
+            let mergedObject: Record<string, any>
 
             // Build fallback chain for non master loales
             if (locale !== this.master) {
@@ -38,12 +58,13 @@ class I18nPlugin {
 
               console.log(`Locale fallbacks for ${locale} ->`, fallbackChain)
 
+              // We merge in reverse order to keep the specified priority of fallbacks
               mergedObject = fallbackChain.reverse().reduce((memo, fallbackLocale) => {
                 try {
                   const fallbackFilepath = `${this.path}/${fallbackLocale}.json`
                   const data = JSON.parse(fs.readFileSync(fallbackFilepath, 'utf8'))
 
-                  memo = _.merge(memo, data)
+                  memo = merge(memo, data)
 
                   return memo
                 } catch (e) {
@@ -58,18 +79,19 @@ class I18nPlugin {
 
             const filepath = `${this.basePath}translations/${locale}.json`
             const content = JSON.stringify(mergedObject)
+            const assets = compilation.assets as Assets
 
-            compilation.assets[filepath] = {
+            assets[filepath] = {
               source: () => { return Buffer.from(content) },
               size: () => { return Buffer.byteLength(content) }
             }
           })
 
-          resolve()
+          resolve(null)
         })
       }
     )
   }
 }
 
-module.exports = I18nPlugin
+export default I18nPlugin
