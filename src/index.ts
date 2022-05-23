@@ -17,12 +17,40 @@ interface Assets {
   }
 }
 
+class FileCache {
+  path: string
+  contents: Record<string, any>
+  stats: Record<string, any>
+
+  constructor (path: string) {
+    this.path = path
+    this.contents = {}
+  }
+
+  retrieve (locale: string): Record<string, any> {
+    const filepath = `${this.path}/${locale}.json`
+
+    const stats = fs.statSync(filepath)
+
+    if (this.contents[locale] && this.stats[locale] === stats.mtime) {
+      return this.contents[locale] // Note: should we cloneDeep?
+    }
+
+    this.contents[locale] = JSON.parse(fs.readFileSync(filepath, 'utf8'))
+    this.stats[locale] = stats.mtime
+
+    return this.contents[locale] // Note: should we cloneDeep?
+  }
+}
+
 class I18nPlugin implements WebpackPluginInstance {
   master: string
   path: string
   supportedLocales: Array<string>
   fallbacks?: Record<string, string>
   basePath?: string
+  initialized: boolean
+  fileCache: FileCache
 
   constructor (options: Options) {
     this.master = options.master
@@ -30,6 +58,8 @@ class I18nPlugin implements WebpackPluginInstance {
     this.supportedLocales = options.supportedLocales
     this.fallbacks = options.fallbacks || {}
     this.basePath = options.basePath || ''
+    this.initialized = false
+    this.fileCache = new FileCache(this.path)
   }
 
   apply (compiler: Compiler): void {
@@ -37,8 +67,13 @@ class I18nPlugin implements WebpackPluginInstance {
       'WebpackI18nFallbacks',
       compilation => {
         return new Promise((resolve, reject) => {
-          console.log(`Initializing I18n... master: '${this.master}'`)
-          console.log('Supported locales: ', this.supportedLocales)
+          if (!this.initialized) {
+            console.log(`Initializing I18n... master: '${this.master}'`)
+            console.log('Supported locales: ', this.supportedLocales)
+          }
+
+          this.initialized = true
+
           console.log(`Merging locales with their fallbacks...`)
 
           this.supportedLocales.forEach(locale => {
@@ -61,8 +96,7 @@ class I18nPlugin implements WebpackPluginInstance {
               // We merge in reverse order to keep the specified priority of fallbacks
               mergedObject = fallbackChain.reverse().reduce((memo, fallbackLocale) => {
                 try {
-                  const fallbackFilepath = `${this.path}/${fallbackLocale}.json`
-                  const data = JSON.parse(fs.readFileSync(fallbackFilepath, 'utf8'))
+                  const data = this.fileCache.retrieve(fallbackLocale)
 
                   memo = merge(memo, data)
 
@@ -72,9 +106,7 @@ class I18nPlugin implements WebpackPluginInstance {
                 }
               }, {})
             } else {
-              const masterFilepath = `${this.path}/${this.master}.json`
-
-              mergedObject = JSON.parse(fs.readFileSync(masterFilepath, 'utf8'))
+              mergedObject = this.fileCache.retrieve(this.master)
             }
 
             const filepath = `${this.basePath}translations/${locale}.json`
