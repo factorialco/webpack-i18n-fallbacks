@@ -25,19 +25,26 @@ class FileCache {
   constructor (path: string) {
     this.path = path
     this.contents = {}
+    this.stats = {}
+  }
+
+  cached (locale: string): boolean {
+    const filepath = `${this.path}/${locale}.json`
+
+    const stats = fs.statSync(filepath)
+
+    return this.stats[locale]?.toString() === stats.mtime.toString()
   }
 
   retrieve (locale: string): Record<string, any> {
     const filepath = `${this.path}/${locale}.json`
 
-    const stats = fs.statSync(filepath)
-
-    if (this.contents[locale] && this.stats[locale] === stats.mtime) {
+    if (this.contents[locale] && this.cached(locale)) {
       return this.contents[locale] // Note: should we cloneDeep?
     }
 
     this.contents[locale] = JSON.parse(fs.readFileSync(filepath, 'utf8'))
-    this.stats[locale] = stats.mtime
+    this.stats[locale] = fs.statSync(filepath).mtime
 
     return this.contents[locale] // Note: should we cloneDeep?
   }
@@ -89,6 +96,13 @@ class I18nPlugin implements WebpackPluginInstance {
               while (currentFallbackLocale !== this.master) {
                 currentFallbackLocale = this.fallbacks[currentFallbackLocale]
                 fallbackChain.push(currentFallbackLocale)
+              }
+
+              const cachedChain = fallbackChain.reduce((memo, locale: string) => memo && this.fileCache.cached(locale), true)
+
+              if (cachedChain) {
+                console.log(`Using cached version for ${locale}!`)
+                return
               }
 
               console.log(`Locale fallbacks for ${locale} ->`, fallbackChain)
